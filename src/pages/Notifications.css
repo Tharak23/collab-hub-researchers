@@ -1,0 +1,143 @@
+.notifications-page {
+  min-height: 100vh;
+  background-color: var(--gray-50);
+}
+
+.notifications-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 30px 20px;
+}
+
+.notifications-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.notifications-header h1 {
+  font-size: 2em;
+  margin-bottom: 8px;
+  color: var(--gray-900);
+}
+
+.notifications-header p {
+  color: var(--gray-600);
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.notifications-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notification-item {
+  background-color: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  gap: 16px;
+  transition: all 0.2s;
+}
+
+.notification-item.unread {
+  background-color: var(--primary-blue-light);
+  border-color: var(--primary-blue);
+}
+
+.notification-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  background-color: var(--primary-blue);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-item.read .notification-icon {
+  background-color: var(--gray-300);
+}
+
+.notification-content {
+  flex: 1;
+}
+
+.notification-content h3 {
+  font-size: 1em;
+  margin-bottom: 4px;
+  color: var(--gray-900);
+}
+
+.notification-content p {
+  color: var(--gray-600);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.notification-time {
+  font-size: 0.85em;
+  color: var(--gray-500);
+}
+
+.notification-actions {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.action-btn {
+  background-color: transparent;
+  border: 1px solid var(--gray-300);
+  color: var(--gray-600);
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  background-color: var(--gray-100);
+  border-color: var(--gray-400);
+}
+
+.delete-btn:hover {
+  background-color: var(--danger);
+  border-color: var(--danger);
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .notifications-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .notification-item {
+    flex-direction: column;
+  }
+
+  .notification-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
