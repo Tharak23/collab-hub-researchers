@@ -50,7 +50,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const addToAllUsers = (userData) => {
-    const allUsers = JSON.parse(localStorage.getItem('allUsers') || '[]');
+    const allUsers = JSON.parse(localStorage.getItem('globalAllUsers') || '[]');
     
     // Check if user already exists
     const existingIndex = allUsers.findIndex(u => u.email === userData.email);
@@ -63,7 +63,7 @@ export const AuthProvider = ({ children }) => {
       allUsers.push(userData);
     }
     
-    localStorage.setItem('allUsers', JSON.stringify(allUsers));
+    localStorage.setItem('globalAllUsers', JSON.stringify(allUsers));
   };
 
   const logout = () => {

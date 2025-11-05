@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import { User, Mail, Building, GraduationCap, Save } from 'lucide-react';
@@ -8,21 +8,39 @@ const Profile = () => {
   const { user, updateProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    firstName: user?.firstName || '',
-    lastName: user?.lastName || '',
-    email: user?.email || '',
-    institution: user?.institution || '',
-    department: user?.department || '',
-    bio: user?.bio || ''
+    firstName: '',
+    lastName: '',
+    email: '',
+    institution: '',
+    department: '',
+    bio: ''
   });
   const [message, setMessage] = useState('');
+
+  // Update formData when user changes
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email || '',
+        institution: user.institution || '',
+        department: user.department || '',
+        bio: user.bio || ''
+      });
+    }
+  }, [user]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     updateProfile(formData);
     setIsEditing(false);
     setMessage('Profile updated successfully!');
-    setTimeout(() => setMessage(''), 3000);
+    setTimeout(() => {
+      setMessage('');
+      // Refresh the page to show updated data
+      window.location.reload();
+    }, 1000);
   };
 
   const handleCancel = () => {

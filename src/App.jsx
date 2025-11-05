@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
@@ -12,9 +13,15 @@ import Collaborators from './pages/Collaborators';
 import Notifications from './pages/Notifications';
 import Tasks from './pages/Tasks';
 import Messages from './pages/Messages';
+import { initializeDummyData } from './utils/initDummyData';
 import './App.css';
 
 function App() {
+  // Initialize dummy data on app load
+  useEffect(() => {
+    initializeDummyData();
+  }, []);
+
   return (
     <AuthProvider>
       <NotificationProvider>

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
@@ -6,20 +7,114 @@ import './Dashboard.css';
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const [stats, setStats] = useState([
+    { icon: <FolderOpen size={24} />, label: 'Active Projects', value: '0', color: '#646cff' },
+    { icon: <CheckSquare size={24} />, label: 'Tasks Completed', value: '0', color: '#22c55e' },
+    { icon: <BookOpen size={24} />, label: 'Research Papers', value: '0', color: '#f59e0b' },
+    { icon: <Users size={24} />, label: 'Collaborators', value: '0', color: '#ef4444' }
+  ]);
+  const [recentActivity, setRecentActivity] = useState([]);
 
-  const stats = [
-    { icon: <FolderOpen size={24} />, label: 'Active Projects', value: '12', color: '#646cff' },
-    { icon: <CheckSquare size={24} />, label: 'Tasks Completed', value: '48', color: '#22c55e' },
-    { icon: <BookOpen size={24} />, label: 'Research Papers', value: '24', color: '#f59e0b' },
-    { icon: <Users size={24} />, label: 'Collaborators', value: '36', color: '#ef4444' }
-  ];
+  useEffect(() => {
+    calculateStats();
+    loadRecentActivity();
+  }, [user]);
 
-  const recentActivity = [
-    { action: 'Created new project', title: 'AI Research Study', time: '2 hours ago' },
-    { action: 'Updated task', title: 'Data Analysis', time: '4 hours ago' },
-    { action: 'Shared paper', title: 'Machine Learning Paper', time: 'Yesterday' },
-    { action: 'Added collaborator', title: 'John Smith to Project X', time: '2 days ago' }
-  ];
+  const calculateStats = () => {
+    if (!user) return;
+
+    // Calculate active projects
+    const projects = JSON.parse(localStorage.getItem('globalProjects') || '[]');
+    const activeProjects = projects.filter(p => p.status === 'active' || p.status === 'planning').length;
+
+    // Calculate completed tasks
+    const tasks = JSON.parse(localStorage.getItem(`tasks_${user.id}`) || '[]');
+    const completedTasks = tasks.filter(t => t.completed).length;
+
+    // Calculate research papers
+    const papers = JSON.parse(localStorage.getItem('globalResearchPapers') || '[]');
+    const papersCount = papers.length;
+
+    // Calculate collaborators
+    const connections = JSON.parse(localStorage.getItem(`connections_${user.id}`) || '[]');
+    const collaboratorsCount = connections.length;
+
+    setStats([
+      { icon: <FolderOpen size={24} />, label: 'Active Projects', value: activeProjects.toString(), color: '#646cff' },
+      { icon: <CheckSquare size={24} />, label: 'Tasks Completed', value: completedTasks.toString(), color: '#22c55e' },
+      { icon: <BookOpen size={24} />, label: 'Research Papers', value: papersCount.toString(), color: '#f59e0b' },
+      { icon: <Users size={24} />, label: 'Collaborators', value: collaboratorsCount.toString(), color: '#ef4444' }
+    ]);
+  };
+
+  const loadRecentActivity = () => {
+    if (!user) return;
+
+    const activities = [];
+
+    // Get recent projects
+    const projects = JSON.parse(localStorage.getItem('globalProjects') || '[]');
+    const recentProjects = projects
+      .filter(p => p.createdBy === user.id)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 2)
+      .map(p => ({
+        action: 'Created new project',
+        title: p.title,
+        time: formatTimeAgo(p.createdAt)
+      }));
+
+    // Get recent tasks
+    const tasks = JSON.parse(localStorage.getItem(`tasks_${user.id}`) || '[]');
+    const recentTasks = tasks
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 1)
+      .map(t => ({
+        action: 'Added task',
+        title: t.title,
+        time: formatTimeAgo(t.createdAt)
+      }));
+
+    // Get recent papers
+    const papers = JSON.parse(localStorage.getItem('globalResearchPapers') || '[]');
+    const recentPapers = papers
+      .filter(p => p.uploadedBy === user.id)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 1)
+      .map(p => ({
+        action: 'Uploaded paper',
+        title: p.title,
+        time: formatTimeAgo(p.createdAt)
+      }));
+
+    const allActivities = [...recentProjects, ...recentTasks, ...recentPapers]
+      .sort((a, b) => {
+        // Sort by time (most recent first)
+        const timeOrder = { 'just now': 0, 'minutes ago': 1, 'hours ago': 2, 'days ago': 3 };
+        return (timeOrder[a.time.split(' ')[1]] || 4) - (timeOrder[b.time.split(' ')[1]] || 4);
+      })
+      .slice(0, 4);
+
+    setRecentActivity(allActivities.length > 0 ? allActivities : [
+      { action: 'Welcome!', title: 'Get started by creating your first project', time: 'just now' }
+    ]);
+  };
+
+  const formatTimeAgo = (dateString) => {
+    if (!dateString) return 'recently';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins} minutes ago`;
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+  };
 
   return (
     <div className="dashboard">
@@ -112,28 +207,47 @@ const Dashboard = () => {
           </div>
           <div className="card-body">
             <div className="deadline-list">
-              <div className="deadline-item">
-                <div className="deadline-date">
-                  <span className="deadline-day">15</span>
-                  <span className="deadline-month">Dec</span>
-                </div>
-                <div className="deadline-content">
-                  <div className="deadline-title">Submit Research Proposal</div>
-                  <div className="deadline-project">AI Research Study</div>
-                </div>
-                <span className="badge badge-warning">3 days left</span>
-              </div>
-              <div className="deadline-item">
-                <div className="deadline-date">
-                  <span className="deadline-day">20</span>
-                  <span className="deadline-month">Dec</span>
-                </div>
-                <div className="deadline-content">
-                  <div className="deadline-title">Complete Data Analysis</div>
-                  <div className="deadline-project">Climate Study</div>
-                </div>
-                <span className="badge badge-info">8 days left</span>
-              </div>
+              {(() => {
+                const projects = JSON.parse(localStorage.getItem('globalProjects') || '[]');
+                const upcomingProjects = projects
+                  .filter(p => p.endDate && new Date(p.endDate) > new Date())
+                  .sort((a, b) => new Date(a.endDate) - new Date(b.endDate))
+                  .slice(0, 3);
+
+                if (upcomingProjects.length === 0) {
+                  return (
+                    <div className="empty-state">
+                      <Calendar size={32} />
+                      <p>No upcoming deadlines</p>
+                    </div>
+                  );
+                }
+
+                return upcomingProjects.map((project) => {
+                  const endDate = new Date(project.endDate);
+                  const today = new Date();
+                  const diffTime = endDate - today;
+                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                  return (
+                    <div key={project.id} className="deadline-item">
+                      <div className="deadline-date">
+                        <span className="deadline-day">{endDate.getDate()}</span>
+                        <span className="deadline-month">
+                          {endDate.toLocaleString('en-US', { month: 'short' })}
+                        </span>
+                      </div>
+                      <div className="deadline-content">
+                        <div className="deadline-title">{project.title}</div>
+                        <div className="deadline-project">{project.status}</div>
+                      </div>
+                      <span className={`badge ${diffDays <= 3 ? 'badge-warning' : 'badge-info'}`}>
+                        {diffDays} {diffDays === 1 ? 'day' : 'days'} left
+                      </span>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         </div>

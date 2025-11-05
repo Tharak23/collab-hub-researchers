@@ -21,8 +21,9 @@ const Collaborators = () => {
 
   const loadResearchers = () => {
     // Get ALL real users who have logged in
-    const allUsers = JSON.parse(localStorage.getItem('allUsers') || '[]');
-    setResearchers(allUsers);
+    const allUsers = JSON.parse(localStorage.getItem('globalAllUsers') || '[]');
+    // Exclude current user
+    setResearchers(allUsers.filter(u => u.id !== user?.id));
   };
 
   const loadConnections = () => {
