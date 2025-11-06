@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNotifications } from '../context/NotificationContext';
 import Navbar from '../components/Navbar';
 import { Bell, Check, Trash2, CheckCheck } from 'lucide-react';
@@ -5,6 +6,15 @@ import './Notifications.css';
 
 const Notifications = () => {
   const { notifications, markAsRead, markAllAsRead, deleteNotification, clearAll } = useNotifications();
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Refresh notifications periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshKey(prev => prev + 1);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
 
   const formatTime = (dateString) => {
     const date = new Date(dateString);

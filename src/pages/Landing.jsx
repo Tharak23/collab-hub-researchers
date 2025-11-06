@@ -58,7 +58,7 @@ const Landing = () => {
                 <Link to="/login" className="btn btn-secondary">
                   Sign In
                 </Link>
-                <Link to="/login" className="btn btn-primary">
+                <Link to="/register" className="btn btn-primary">
                   Get Started
                 </Link>
               </>

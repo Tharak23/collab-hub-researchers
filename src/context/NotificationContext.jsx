@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { useAuth } from './AuthContext';
 
 const NotificationContext = createContext(null);
 
@@ -12,33 +13,97 @@ export const useNotifications = () => {
 
 export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
+  let user = null;
+  try {
+    const authContext = useAuth();
+    user = authContext?.user || null;
+  } catch (e) {
+    // useAuth might not be available yet
+  }
 
-  useEffect(() => {
-    // Load notifications from localStorage
-    const storedNotifications = localStorage.getItem('notifications');
-    if (storedNotifications) {
+  const loadNotifications = () => {
+    let currentUser = user;
+    if (!currentUser) {
       try {
-        setNotifications(JSON.parse(storedNotifications));
+        currentUser = JSON.parse(localStorage.getItem('user') || 'null');
       } catch (error) {
-        console.error('Error parsing notifications:', error);
+        // Ignore
       }
     }
-  }, []);
+    
+    if (currentUser && currentUser.id) {
+      const storedNotifications = localStorage.getItem(`notifications_${currentUser.id}`);
+      if (storedNotifications) {
+        try {
+          setNotifications(JSON.parse(storedNotifications));
+        } catch (error) {
+          console.error('Error parsing notifications:', error);
+        }
+      } else {
+        setNotifications([]);
+      }
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+    
+    // Refresh notifications periodically
+    const interval = setInterval(() => {
+      loadNotifications();
+    }, 2000); // Refresh every 2 seconds
+    
+    return () => clearInterval(interval);
+  }, [user]);
 
   const saveNotifications = (newNotifications) => {
-    localStorage.setItem('notifications', JSON.stringify(newNotifications));
+    let currentUser = user;
+    if (!currentUser) {
+      try {
+        currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+      } catch (error) {
+        // Ignore
+      }
+    }
+    if (!currentUser || !currentUser.id) return;
+    
+    localStorage.setItem(`notifications_${currentUser.id}`, JSON.stringify(newNotifications));
     setNotifications(newNotifications);
   };
 
   const addNotification = (notification) => {
+    let currentUser = user;
+    if (!currentUser) {
+      try {
+        currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+      } catch (error) {
+        // Ignore
+      }
+    }
+    if (!currentUser || !currentUser.id) return;
+    
     const newNotification = {
-      id: Date.now().toString(),
+      id: `notif_${Date.now()}_${Math.random()}`,
       ...notification,
       read: false,
       createdAt: new Date().toISOString()
     };
     const updatedNotifications = [newNotification, ...notifications];
     saveNotifications(updatedNotifications);
+  };
+
+  // Add notification to a specific user (for cross-user notifications)
+  const addNotificationToUser = (userId, notification) => {
+    const storedNotifications = localStorage.getItem(`notifications_${userId}`) || '[]';
+    const userNotifications = JSON.parse(storedNotifications);
+    const newNotification = {
+      id: `notif_${Date.now()}_${Math.random()}`,
+      ...notification,
+      read: false,
+      createdAt: new Date().toISOString()
+    };
+    const updatedNotifications = [newNotification, ...userNotifications];
+    localStorage.setItem(`notifications_${userId}`, JSON.stringify(updatedNotifications));
   };
 
   const markAsRead = (notificationId) => {
@@ -68,6 +133,7 @@ export const NotificationProvider = ({ children }) => {
     notifications,
     unreadCount,
     addNotification,
+    addNotificationToUser,
     markAsRead,
     markAllAsRead,
     deleteNotification,

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import { Plus, Search, BookOpen, Star, Eye, Download, MessageSquare, User, X, Upload, FileText } from 'lucide-react';
+import { papersAPI, syncWithBackend } from '../utils/api';
 import './ResearchPapers.css';
 
 const ResearchPapers = () => {
@@ -22,6 +23,8 @@ const ResearchPapers = () => {
     file: null,
     fileName: ''
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [newReview, setNewReview] = useState({
     rating: 5,
     comment: ''
@@ -29,129 +32,249 @@ const ResearchPapers = () => {
 
   useEffect(() => {
     loadPapers();
+    
+    // Refresh papers periodically to see new ones from other users
+    const interval = setInterval(() => {
+      loadPapers();
+    }, 5000); // Refresh every 5 seconds
+    
+    return () => clearInterval(interval);
   }, []);
 
-  const loadPapers = () => {
-    // Load GLOBAL papers (not user-specific)
-    const storedPapers = localStorage.getItem('globalResearchPapers');
-    if (storedPapers) {
-      setPapers(JSON.parse(storedPapers));
+  const loadPapers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Try to load from API first
+      try {
+        const apiPapers = await papersAPI.getAll();
+        setPapers(apiPapers);
+        // Sync to localStorage as backup
+        localStorage.setItem('globalResearchPapers', JSON.stringify(apiPapers));
+      } catch (apiError) {
+        console.warn('API not available, loading from localStorage:', apiError);
+        // Fallback to localStorage if API is not available
+        const storedPapers = localStorage.getItem('globalResearchPapers');
+        if (storedPapers) {
+          setPapers(JSON.parse(storedPapers));
+        }
+      }
+    } catch (err) {
+      console.error('Error loading papers:', err);
+      setError('Failed to load papers');
+      // Fallback to localStorage
+      const storedPapers = localStorage.getItem('globalResearchPapers');
+      if (storedPapers) {
+        setPapers(JSON.parse(storedPapers));
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
-  const savePapers = (papersToSave) => {
+  const savePapers = async (papersToSave) => {
+    // Save to localStorage immediately for fast UI update
     localStorage.setItem('globalResearchPapers', JSON.stringify(papersToSave));
     setPapers(papersToSave);
+    
+    // Try to sync with backend (non-blocking)
+    try {
+      await syncWithBackend();
+    } catch (error) {
+      console.warn('Backend sync failed, but data saved locally:', error);
+    }
   };
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setNewPaper({
-          ...newPaper,
-          file: reader.result, // base64 string
-          fileName: file.name
-        });
-      };
-      reader.readAsDataURL(file);
+      setNewPaper({
+        ...newPaper,
+        file: file, // Store file object for FormData
+        fileName: file.name
+      });
     }
   };
 
-  const handleAddPaper = (e) => {
+  const handleAddPaper = async (e) => {
     e.preventDefault();
     
-    const paperData = {
-      id: `paper_${Date.now()}`,
-      title: newPaper.title,
-      abstract: newPaper.abstract,
-      authors: newPaper.authors.split(',').map(a => a.trim()).filter(a => a) || [`${user?.firstName} ${user?.lastName}`],
-      keywords: newPaper.keywords.split(',').map(k => k.trim()).filter(k => k),
-      category: newPaper.category,
-      uploadedBy: user?.id || '',
-      uploadedByName: `${user?.firstName} ${user?.lastName}`,
-      file: newPaper.file, // Store base64 file
-      fileName: newPaper.fileName,
-      reviews: [],
-      views: 0,
-      downloads: 0,
-      createdAt: new Date().toISOString()
-    };
+    try {
+      setLoading(true);
+      setError(null);
 
-    const updatedPapers = [...papers, paperData];
-    savePapers(updatedPapers);
+      // Try to create via API first
+      try {
+        const paperData = {
+          title: newPaper.title,
+          abstract: newPaper.abstract,
+          authors: newPaper.authors || '',
+          keywords: newPaper.keywords || '',
+          category: newPaper.category
+        };
 
-    setNewPaper({
-      title: '',
-      abstract: '',
-      authors: '',
-      keywords: '',
-      category: 'computer-science',
-      file: null,
-      fileName: ''
-    });
-    setShowAddDialog(false);
+        const createdPaper = await papersAPI.create(paperData, newPaper.file);
+        
+        // Add to local state and localStorage
+        const updatedPapers = [...papers, createdPaper];
+        setPapers(updatedPapers);
+        localStorage.setItem('globalResearchPapers', JSON.stringify(updatedPapers));
+      } catch (apiError) {
+        console.warn('API not available, saving to localStorage:', apiError);
+        // Fallback to localStorage only
+        const paperData = {
+          id: `paper_${Date.now()}`,
+          title: newPaper.title,
+          abstract: newPaper.abstract,
+          authors: newPaper.authors.split(',').map(a => a.trim()).filter(a => a) || [`${user?.firstName} ${user?.lastName}`],
+          keywords: newPaper.keywords.split(',').map(k => k.trim()).filter(k => k),
+          category: newPaper.category,
+          uploadedBy: user?.id || '',
+          uploadedByName: `${user?.firstName} ${user?.lastName}`,
+          fileName: newPaper.fileName,
+          reviews: [],
+          views: 0,
+          downloads: 0,
+          createdAt: new Date().toISOString()
+        };
+
+        const updatedPapers = [...papers, paperData];
+        localStorage.setItem('globalResearchPapers', JSON.stringify(updatedPapers));
+        setPapers(updatedPapers);
+      }
+
+      setNewPaper({
+        title: '',
+        abstract: '',
+        authors: '',
+        keywords: '',
+        category: 'computer-science',
+        file: null,
+        fileName: ''
+      });
+      setShowAddDialog(false);
+    } catch (err) {
+      console.error('Error adding paper:', err);
+      setError('Failed to add paper');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleViewPaper = (paper) => {
+  const handleViewPaper = async (paper) => {
     // Increment views
-    const updatedPapers = papers.map(p => 
-      p.id === paper.id ? { ...p, views: p.views + 1 } : p
-    );
-    savePapers(updatedPapers);
-    
-    const updatedPaper = updatedPapers.find(p => p.id === paper.id);
-    setSelectedPaper(updatedPaper);
+    try {
+      const updatedPaper = await papersAPI.incrementViews(paper.id);
+      const updatedPapers = papers.map(p => 
+        p.id === paper.id ? updatedPaper : p
+      );
+      setPapers(updatedPapers);
+      localStorage.setItem('globalResearchPapers', JSON.stringify(updatedPapers));
+      setSelectedPaper(updatedPaper);
+    } catch (error) {
+      console.warn('Could not increment views via API, using local:', error);
+      const updatedPapers = papers.map(p => 
+        p.id === paper.id ? { ...p, views: (p.views || 0) + 1 } : p
+      );
+      localStorage.setItem('globalResearchPapers', JSON.stringify(updatedPapers));
+      setPapers(updatedPapers);
+      const updatedPaper = updatedPapers.find(p => p.id === paper.id);
+      setSelectedPaper(updatedPaper);
+    }
     setShowViewDialog(true);
   };
 
-  const handleDownload = (paper) => {
-    if (!paper.file) {
+  const handleDownload = async (paper) => {
+    if (!paper.fileName && !paper.filePath) {
       alert('No file attached to this paper');
       return;
     }
 
-    // Increment downloads
-    const updatedPapers = papers.map(p => 
-      p.id === paper.id ? { ...p, downloads: p.downloads + 1 } : p
-    );
-    savePapers(updatedPapers);
-
-    // Download file
-    const link = document.createElement('a');
-    link.href = paper.file;
-    link.download = paper.fileName || 'research-paper.pdf';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      // Try to download from API
+      try {
+        await papersAPI.download(paper.id, paper.fileName);
+        // Reload papers to get updated download count
+        await loadPapers();
+      } catch (apiError) {
+        console.warn('API download failed, trying local:', apiError);
+        // Fallback: if file is stored as base64 in localStorage
+        if (paper.file) {
+          const link = document.createElement('a');
+          link.href = paper.file;
+          link.download = paper.fileName || 'research-paper.pdf';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          // Increment downloads locally
+          const updatedPapers = papers.map(p => 
+            p.id === paper.id ? { ...p, downloads: (p.downloads || 0) + 1 } : p
+          );
+          localStorage.setItem('globalResearchPapers', JSON.stringify(updatedPapers));
+          setPapers(updatedPapers);
+        } else {
+          alert('File not available for download');
+        }
+      }
+    } catch (err) {
+      console.error('Download error:', err);
+      alert('Failed to download paper');
+    }
   };
 
-  const handleAddReview = (e) => {
+  const handleAddReview = async (e) => {
     e.preventDefault();
     
-    const review = {
-      id: `rev_${Date.now()}`,
-      reviewerId: user?.id || '',
-      reviewerName: `${user?.firstName} ${user?.lastName}`,
-      rating: newReview.rating,
-      comment: newReview.comment,
-      createdAt: new Date().toISOString()
-    };
+    try {
+      setLoading(true);
+      const review = {
+        rating: newReview.rating,
+        comment: newReview.comment
+      };
 
-    const updatedPapers = papers.map(paper => 
-      paper.id === selectedPaper.id
-        ? { ...paper, reviews: [...paper.reviews, review] }
-        : paper
-    );
+      // Try to add review via API
+      try {
+        const updatedPaper = await papersAPI.addReview(selectedPaper.id, review);
+        const updatedPapers = papers.map(p => 
+          p.id === selectedPaper.id ? updatedPaper : p
+        );
+        setPapers(updatedPapers);
+        localStorage.setItem('globalResearchPapers', JSON.stringify(updatedPapers));
+        setSelectedPaper(updatedPaper);
+      } catch (apiError) {
+        console.warn('API not available, saving review locally:', apiError);
+        // Fallback to localStorage
+        const reviewData = {
+          id: `rev_${Date.now()}`,
+          reviewerId: user?.id || '',
+          reviewerName: `${user?.firstName} ${user?.lastName}`,
+          rating: newReview.rating,
+          comment: newReview.comment,
+          createdAt: new Date().toISOString()
+        };
 
-    savePapers(updatedPapers);
+        const updatedPapers = papers.map(paper => 
+          paper.id === selectedPaper.id
+            ? { ...paper, reviews: [...(paper.reviews || []), reviewData] }
+            : paper
+        );
 
-    setNewReview({ rating: 5, comment: '' });
-    setShowReviewDialog(false);
-    
-    const updatedPaper = updatedPapers.find(p => p.id === selectedPaper.id);
-    setSelectedPaper(updatedPaper);
+        localStorage.setItem('globalResearchPapers', JSON.stringify(updatedPapers));
+        setPapers(updatedPapers);
+        const updatedPaper = updatedPapers.find(p => p.id === selectedPaper.id);
+        setSelectedPaper(updatedPaper);
+      }
+
+      setNewReview({ rating: 5, comment: '' });
+      setShowReviewDialog(false);
+    } catch (err) {
+      console.error('Error adding review:', err);
+      setError('Failed to add review');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const averageRating = (reviews) => {
@@ -171,12 +294,27 @@ const ResearchPapers = () => {
     <div className="papers-page">
       <Navbar />
       <div className="papers-container">
+        {error && (
+          <div className="error-message" style={{ 
+            padding: '12px', 
+            marginBottom: '20px', 
+            backgroundColor: '#fee', 
+            color: '#c33', 
+            borderRadius: '8px' 
+          }}>
+            {error}
+          </div>
+        )}
         <div className="papers-header">
           <div>
             <h1>Research Papers</h1>
             <p>Browse, upload, and review academic research papers</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowAddDialog(true)}>
+          <button 
+            className="btn btn-primary" 
+            onClick={() => setShowAddDialog(true)}
+            disabled={loading}
+          >
             <Plus size={18} />
             Add Paper
           </button>
@@ -306,11 +444,13 @@ const ResearchPapers = () => {
                     onChange={handleFileChange}
                     id="file-input"
                     style={{ display: 'none' }}
+                    disabled={loading}
                   />
                   <button
                     type="button"
                     className="btn btn-secondary"
                     onClick={() => document.getElementById('file-input').click()}
+                    disabled={loading}
                   >
                     <Upload size={18} />
                     {newPaper.fileName || 'Choose File'}

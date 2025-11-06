@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import { Plus, Search, Filter, FolderOpen, Calendar, Users } from 'lucide-react';
+import { projectsAPI, syncWithBackend } from '../utils/api';
 import './Projects.css';
 
 const Projects = () => {
@@ -25,48 +26,98 @@ const Projects = () => {
 
   useEffect(() => {
     loadProjects();
+    
+    // Refresh projects periodically to see new ones from other users
+    const interval = setInterval(() => {
+      loadProjects();
+    }, 5000); // Refresh every 5 seconds
+    
+    return () => clearInterval(interval);
   }, []);
 
-  const loadProjects = () => {
-    // Load GLOBAL projects (not user-specific)
-    const storedProjects = localStorage.getItem('globalProjects');
-    if (storedProjects) {
-      setProjects(JSON.parse(storedProjects));
+  const loadProjects = async () => {
+    try {
+      // Try to load from API first
+      try {
+        const apiProjects = await projectsAPI.getAll();
+        setProjects(apiProjects);
+        localStorage.setItem('globalProjects', JSON.stringify(apiProjects));
+      } catch (apiError) {
+        console.warn('API not available, loading from localStorage:', apiError);
+        // Fallback to localStorage
+        const storedProjects = localStorage.getItem('globalProjects');
+        if (storedProjects) {
+          setProjects(JSON.parse(storedProjects));
+        }
+      }
+    } catch (err) {
+      console.error('Error loading projects:', err);
+      const storedProjects = localStorage.getItem('globalProjects');
+      if (storedProjects) {
+        setProjects(JSON.parse(storedProjects));
+      }
     }
   };
 
-  const saveProjects = (projectsToSave) => {
+  const saveProjects = async (projectsToSave) => {
+    // Save to localStorage immediately
     localStorage.setItem('globalProjects', JSON.stringify(projectsToSave));
     setProjects(projectsToSave);
+    
+    // Try to sync with backend
+    try {
+      await syncWithBackend();
+    } catch (error) {
+      console.warn('Backend sync failed, but data saved locally:', error);
+    }
   };
 
-  const handleCreateProject = (e) => {
+  const handleCreateProject = async (e) => {
     e.preventDefault();
     
-    const projectData = {
-      id: Date.now().toString(),
-      ...newProject,
-      progress: 0,
-      createdBy: user?.id || '',
-      createdByName: `${user?.firstName} ${user?.lastName}`,
-      createdAt: new Date().toISOString()
-    };
+    try {
+      // Try to create via API first
+      try {
+        const projectData = {
+          ...newProject,
+          progress: 0
+        };
+        const createdProject = await projectsAPI.create(projectData);
+        const updatedProjects = [...projects, createdProject];
+        setProjects(updatedProjects);
+        localStorage.setItem('globalProjects', JSON.stringify(updatedProjects));
+      } catch (apiError) {
+        console.warn('API not available, saving to localStorage:', apiError);
+        // Fallback to localStorage
+        const projectData = {
+          id: Date.now().toString(),
+          ...newProject,
+          progress: 0,
+          createdBy: user?.id || '',
+          createdByName: `${user?.firstName} ${user?.lastName}`,
+          createdAt: new Date().toISOString()
+        };
+        const updatedProjects = [...projects, projectData];
+        localStorage.setItem('globalProjects', JSON.stringify(updatedProjects));
+        setProjects(updatedProjects);
+      }
 
-    const updatedProjects = [...projects, projectData];
-    saveProjects(updatedProjects);
-
-    setNewProject({
-      title: '',
-      description: '',
-      status: 'planning',
-      priority: 'medium',
-      startDate: '',
-      endDate: '',
-      budget: '',
-      department: '',
-      institution: ''
-    });
-    setShowCreateDialog(false);
+      setNewProject({
+        title: '',
+        description: '',
+        status: 'planning',
+        priority: 'medium',
+        startDate: '',
+        endDate: '',
+        budget: '',
+        department: '',
+        institution: ''
+      });
+      setShowCreateDialog(false);
+    } catch (err) {
+      console.error('Error creating project:', err);
+      alert('Failed to create project');
+    }
   };
 
   const filteredProjects = projects.filter(project => {
